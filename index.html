@@ -1,16 +1,571 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<link
-			rel="icon"
-			href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 66 30'><path fill='%23000000' d='M52.688 13.028c-.22 0-.437.008-.654.015a.3.3 0 0 0-.102.024.37.37 0 0 0-.236.255l-.93 3.249c-.401 1.397-.252 2.687.422 3.634.618.876 1.646 1.39 2.894 1.45l5.045.306a.45.45 0 0 1 .435.41.5.5 0 0 1-.025.223.64.64 0 0 1-.547.426l-5.242.306c-2.848.132-5.912 2.456-6.987 5.29l-.378 1a.28.28 0 0 0 .248.382h18.054a.48.48 0 0 0 .464-.35c.32-1.153.482-2.344.48-3.54 0-7.22-5.79-13.072-12.933-13.072M44.807 29.578l.334-1.175c.402-1.397.253-2.687-.42-3.634-.62-.876-1.647-1.39-2.896-1.45l-23.665-.306a.47.47 0 0 1-.374-.199.5.5 0 0 1-.052-.434.64.64 0 0 1 .552-.426l23.886-.306c2.836-.131 5.9-2.456 6.975-5.29l1.362-3.6a.9.9 0 0 0 .04-.477C48.997 5.259 42.789 0 35.367 0c-6.842 0-12.647 4.462-14.73 10.665a6.92 6.92 0 0 0-4.911-1.374c-3.28.33-5.92 3.002-6.246 6.318a7.2 7.2 0 0 0 .18 2.472C4.3 18.241 0 22.679 0 28.133q0 .74.106 1.453a.46.46 0 0 0 .457.402h43.704a.57.57 0 0 0 .54-.418'/></svg>"
-		/>
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>Workflows Starter Template</title>
-	</head>
-	<body>
-		<div id="root"></div>
-		<script type="module" src="/src/main.tsx"></script>
-	</body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proof — PDF Text &amp; Form Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<style>
+  :root{
+    --ink:#1c1a17;
+    --paper:#faf7f0;
+    --paper-dim:#f0ece1;
+    --rule:#ddd6c4;
+    --red:#8c2f2f;
+    --red-dim:#c66;
+    --gold:#a6803a;
+    --panel:#22201c;
+    --panel-ink:#ece7db;
+    --mono: 'JetBrains Mono', monospace;
+    --serif: 'Source Serif 4', Georgia, serif;
+    --sans: 'Inter', -apple-system, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--paper-dim);font-family:var(--sans);color:var(--ink);}
+  ::selection{background:#e8c9c9;}
+
+  /* ---- Top bar ---- */
+  #topbar{
+    display:flex;align-items:center;gap:14px;
+    background:var(--panel);color:var(--panel-ink);
+    padding:12px 18px;position:sticky;top:0;z-index:50;
+    border-bottom:3px solid var(--red);
+  }
+  #brand{display:flex;align-items:baseline;gap:8px;margin-right:auto;}
+  #brand .mark{font-family:var(--serif);font-style:italic;font-weight:700;font-size:22px;color:#fff;}
+  #brand .tag{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);}
+  .btn{
+    font-family:var(--sans);font-weight:600;font-size:13px;
+    background:transparent;color:var(--panel-ink);
+    border:1px solid #4a463d;border-radius:3px;
+    padding:8px 14px;cursor:pointer;transition:all .15s ease;
+    white-space:nowrap;
+  }
+  .btn:hover:not(:disabled){border-color:var(--gold);color:var(--gold);}
+  .btn:disabled{opacity:.35;cursor:not-allowed;}
+  .btn.primary{background:var(--red);border-color:var(--red);color:#fff;}
+  .btn.primary:hover:not(:disabled){background:#a53c3c;border-color:#a53c3c;color:#fff;}
+  .btn.active{background:var(--gold);border-color:var(--gold);color:#1c1a17;}
+  #fileInput{display:none;}
+
+  /* ---- Layout ---- */
+  #app{display:flex;height:calc(100% - 53px);}
+  #stage{
+    flex:1;overflow:auto;padding:36px 0 120px;
+    display:flex;flex-direction:column;align-items:center;gap:28px;
+  }
+  .page-wrap{position:relative;box-shadow:0 6px 24px rgba(0,0,0,.18);background:#fff;}
+  .page-wrap canvas{display:block;}
+  .page-num{
+    position:absolute;bottom:-22px;left:0;right:0;text-align:center;
+    font-family:var(--mono);font-size:10px;color:#8a8574;letter-spacing:.08em;
+  }
+  .txt-item{
+    position:absolute;transform-origin:0 0;white-space:pre;
+    outline:none;line-height:1;background:transparent;color:transparent;
+    caret-color:#000;padding:0;margin:0;overflow:visible;
+  }
+  .txt-item.editable{cursor:text;}
+  .txt-item.editable:hover{background:rgba(140,47,47,.08);}
+  .txt-item.dirty{
+    background:#fff;color:#111;
+    box-shadow:0 0 0 1px var(--red);
+  }
+  .txt-item.field-marked{
+    background:rgba(166,128,58,.16);
+    box-shadow:0 0 0 1px var(--gold);
+    color:transparent;
+  }
+
+  /* ---- Sidebar ---- */
+  #sidebar{
+    width:300px;flex:none;background:var(--paper);
+    border-left:1px solid var(--rule);
+    padding:20px 18px 40px;overflow-y:auto;
+  }
+  #sidebar h2{
+    font-family:var(--serif);font-style:italic;font-size:15px;margin:0 0 4px;
+    border-bottom:1px solid var(--rule);padding-bottom:8px;
+  }
+  #sidebar .hint{font-size:12px;color:#6b6656;line-height:1.5;margin:8px 0 18px;}
+  .specimen{
+    border:1px solid var(--rule);background:#fff;padding:12px 14px;margin-bottom:16px;border-radius:2px;
+  }
+  .specimen .row{display:flex;justify-content:space-between;font-size:11px;color:#6b6656;margin-bottom:3px;font-family:var(--mono);}
+  .specimen .row b{color:var(--ink);font-weight:600;}
+  .specimen .sample{
+    font-size:20px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--rule);
+  }
+  .empty-state{font-size:12px;color:#9a9583;font-style:italic;}
+  .step{
+    display:flex;gap:10px;margin-bottom:14px;font-size:12.5px;line-height:1.5;color:#4a4638;
+  }
+  .step .n{
+    flex:none;width:20px;height:20px;border-radius:50%;background:var(--panel);color:#fff;
+    font-family:var(--mono);font-size:10px;display:flex;align-items:center;justify-content:center;
+  }
+  #fontList{list-style:none;padding:0;margin:0;font-size:12px;}
+  #fontList li{
+    display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--rule);
+    font-family:var(--mono);color:#4a4638;
+  }
+  #fontList li span.match{color:var(--red);}
+
+  #dropzone{
+    margin:auto;text-align:center;color:#8a8574;max-width:420px;padding:40px;
+  }
+  #dropzone .mark{font-family:var(--serif);font-style:italic;font-size:34px;color:var(--ink);margin-bottom:10px;}
+  #dropzone p{font-size:13.5px;line-height:1.6;}
+  #dropzone .btn{margin-top:14px;}
+
+  #modeBanner{
+    font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-align:center;
+    padding:6px;color:var(--panel-ink);background:var(--gold);color:#221f1a;display:none;
+  }
+  #modeBanner.show{display:block;}
+
+  .spinner{
+    width:16px;height:16px;border:2px solid rgba(255,255,255,.25);border-top-color:var(--gold);
+    border-radius:50%;animation:spin .8s linear infinite;display:none;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  #toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(20px);
+    background:var(--panel);color:#fff;padding:10px 18px;border-radius:4px;font-size:13px;
+    border-left:3px solid var(--red);opacity:0;pointer-events:none;transition:all .25s ease;z-index:100;
+  }
+  #toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  @media (max-width:800px){
+    #app{flex-direction:column;}
+    #sidebar{width:auto;border-left:none;border-top:1px solid var(--rule);}
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div id="brand"><span class="mark">Proof</span><span class="tag">PDF Type Editor</span></div>
+  <input type="file" id="fileInput" accept="application/pdf">
+  <button class="btn" id="openBtn">Open PDF</button>
+  <button class="btn" id="editModeBtn" disabled>Edit Text</button>
+  <button class="btn" id="formModeBtn" disabled>Mark Form Fields</button>
+  <button class="btn primary" id="exportBtn" disabled>Export Edited PDF</button>
+  <button class="btn primary" id="exportFormBtn" disabled>Export Fillable Form</button>
+  <div class="spinner" id="spinner"></div>
+</div>
+<div id="modeBanner"></div>
+
+<div id="app">
+  <div id="stage">
+    <div id="dropzone">
+      <div class="mark">Aa</div>
+      <p>Open a PDF to edit its text in place. Proof reads the embedded font of every line, matches it to the closest available typeface, and lets you type directly over the original — or turn any line into a fillable form field.</p>
+      <button class="btn primary" id="dropOpenBtn">Choose a PDF file</button>
+    </div>
+  </div>
+  <div id="sidebar">
+    <h2>Selection</h2>
+    <div id="selectionPanel"><p class="empty-state">Click any line of text on the page to inspect its detected font.</p></div>
+
+    <h2 style="margin-top:22px;">How it works</h2>
+    <div class="step"><div class="n">1</div>Open a PDF — every text line is read from the document's own font data.</div>
+    <div class="step"><div class="n">2</div><b>Edit Text</b> mode lets you click and retype any line; edits are drawn in the closest matching font on export.</div>
+    <div class="step"><div class="n">3</div><b>Mark Form Fields</b> mode converts selected lines into real, fillable PDF form fields.</div>
+    <div class="step"><div class="n">4</div>Export — either a flattened edited PDF, or an interactive fillable-form PDF.</div>
+
+    <h2 style="margin-top:22px;">Fonts in this document</h2>
+    <ul id="fontList"><li class="empty-state" style="border:none;">None yet</li></ul>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+const { PDFDocument, StandardFonts, rgb } = PDFLib;
+
+/* ============ State ============ */
+const S = {
+  originalBytes: null,     // ArrayBuffer of the uploaded PDF
+  pdfDoc: null,             // pdf.js document
+  pages: [],                 // per-page: { viewport, items:[{...}], canvas }
+  mode: 'view',              // 'view' | 'edit' | 'form'
+  fontsSeen: new Map(),      // fontName -> {label, family, bold, italic}
+  formMarks: new Set(),      // "pageIdx-itemIdx" marked as form fields
+};
+
+const el = id => document.getElementById(id);
+const stage = el('stage');
+const sidebar = el('selectionPanel');
+const spinner = el('spinner');
+
+function toast(msg){
+  const t = el('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(()=>t.classList.remove('show'), 2600);
+}
+function busy(on){ spinner.style.display = on ? 'inline-block' : 'none'; }
+
+/* ============ Font matching ============ */
+// Map a pdf.js font descriptor to a CSS-safe stack and to a PDFLib StandardFont.
+function classifyFont(name, fallbackName){
+  const n = (name || '').toLowerCase();
+  const bold = /bold|black|heavy|semibold/.test(n);
+  const italic = /italic|oblique/.test(n);
+  let family = 'sans';
+  if (/courier|mono|consolas|menlo/.test(n) || fallbackName === 'monospace') family = 'mono';
+  else if (/times|georgia|serif|garamond|cambria|minion|palatino|book\s?antiqua/.test(n) || fallbackName === 'serif') family = 'serif';
+  else family = 'sans';
+  return { bold, italic, family };
+}
+function cssFontStack(cls){
+  if (cls.family === 'serif') return `${cls.italic?'italic':'normal'} ${cls.bold?'700':'400'} 1em "Times New Roman", Georgia, serif`;
+  if (cls.family === 'mono') return `${cls.italic?'italic':'normal'} ${cls.bold?'700':'400'} 1em "Courier New", monospace`;
+  return `${cls.italic?'italic':'normal'} ${cls.bold?'700':'400'} 1em Arial, Helvetica, sans-serif`;
+}
+function standardFontKey(cls){
+  if (cls.family === 'serif'){
+    if (cls.bold && cls.italic) return 'TimesRomanBoldItalic';
+    if (cls.bold) return 'TimesRomanBold';
+    if (cls.italic) return 'TimesRomanItalic';
+    return 'TimesRoman';
+  }
+  if (cls.family === 'mono'){
+    if (cls.bold && cls.italic) return 'CourierBoldOblique';
+    if (cls.bold) return 'CourierBold';
+    if (cls.italic) return 'CourierOblique';
+    return 'Courier';
+  }
+  if (cls.bold && cls.italic) return 'HelveticaBoldOblique';
+  if (cls.bold) return 'HelveticaBold';
+  if (cls.italic) return 'HelveticaOblique';
+  return 'Helvetica';
+}
+function readableLabel(cls){
+  const fam = cls.family === 'serif' ? 'Times' : cls.family === 'mono' ? 'Courier' : 'Helvetica';
+  let suffix = '';
+  if (cls.bold && cls.italic) suffix = ' Bold Italic';
+  else if (cls.bold) suffix = ' Bold';
+  else if (cls.italic) suffix = ' Italic';
+  return fam + suffix;
+}
+
+/* ============ Loading a PDF ============ */
+async function loadPdf(arrayBuffer){
+  busy(true);
+  try {
+    S.originalBytes = arrayBuffer.slice(0);
+    S.pdfDoc = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    S.pages = [];
+    S.fontsSeen.clear();
+    S.formMarks.clear();
+    stage.innerHTML = '';
+
+    let anyText = false;
+    for (let p = 1; p <= S.pdfDoc.numPages; p++){
+      const pageData = await renderPage(p);
+      S.pages.push(pageData);
+      if (pageData.items.length) anyText = true;
+    }
+    refreshFontList();
+    el('editModeBtn').disabled = false;
+    el('formModeBtn').disabled = false;
+    el('exportBtn').disabled = false;
+    el('exportFormBtn').disabled = false;
+
+    if (!anyText){
+      toast('No selectable text found — this PDF may be scanned/image-based and would need OCR first.');
+    } else {
+      toast(`Loaded ${S.pdfDoc.numPages} page${S.pdfDoc.numPages>1?'s':''}. Choose a mode to start editing.`);
+    }
+  } catch(err){
+    console.error(err);
+    toast('Could not open that PDF: ' + err.message);
+  } finally {
+    busy(false);
+  }
+}
+
+async function renderPage(pageNum){
+  const page = await S.pdfDoc.getPage(pageNum);
+  const baseScale = Math.min(1.6, (stage.clientWidth - 80) / page.getViewport({scale:1}).width || 1.4);
+  const scale = Math.max(1.0, baseScale);
+  const viewport = page.getViewport({ scale });
+
+  const wrap = document.createElement('div');
+  wrap.className = 'page-wrap';
+  wrap.style.width = viewport.width + 'px';
+  wrap.style.height = viewport.height + 'px';
+
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  const ctx = canvas.getContext('2d');
+  wrap.appendChild(canvas);
+
+  const pageNumEl = document.createElement('div');
+  pageNumEl.className = 'page-num';
+  pageNumEl.textContent = `Page ${pageNum} of ${S.pdfDoc.numPages}`;
+  wrap.appendChild(pageNumEl);
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  const textContent = await page.getTextContent();
+  const items = [];
+
+  textContent.items.forEach((raw, idx) => {
+    if (!raw.str || !raw.str.trim()) return;
+
+    // Resolve the font used by this run.
+    let fontInfo = S.fontsSeen.get(raw.fontName);
+    if (!fontInfo){
+      let fObj = null;
+      try { fObj = page.commonObjs.get(raw.fontName); } catch(e){ fObj = null; }
+      const name = fObj ? (fObj.name || fObj.fallbackName || raw.fontName) : raw.fontName;
+      const fallbackName = fObj ? fObj.fallbackName : null;
+      const cls = classifyFont(name, fallbackName);
+      fontInfo = { rawName: name, ...cls, label: readableLabel(cls), stdKey: standardFontKey(cls) };
+      S.fontsSeen.set(raw.fontName, fontInfo);
+    }
+
+    // Position: replicate pdf.js text-layer math (viewport-space).
+    const tx = pdfjsLib.Util.transform(viewport.transform, raw.transform);
+    const angle = Math.atan2(tx[1], tx[0]);
+    const fontHeight = Math.hypot(tx[2], tx[3]);
+    const left = tx[4];
+    const top = tx[5] - fontHeight;
+    const scaleX = Math.hypot(tx[0], tx[1]) / fontHeight || 1;
+
+    const div = document.createElement('div');
+    div.className = 'txt-item';
+    div.contentEditable = 'false';
+    div.spellcheck = false;
+    div.dataset.pageIdx = S.pages.length;
+    div.dataset.itemIdx = items.length;
+    div.style.left = left + 'px';
+    div.style.top = top + 'px';
+    div.style.fontSize = fontHeight + 'px';
+    div.style.font = cssFontStack(fontInfo).replace('1em', fontHeight + 'px');
+    div.style.transform = angle ? `rotate(${angle}rad) scaleX(${scaleX})` : (scaleX !== 1 ? `scaleX(${scaleX})` : '');
+    div.textContent = raw.str;
+    wrap.appendChild(div);
+
+    items.push({
+      div, original: raw.str,
+      // raw PDF-space geometry (bottom-left origin) for export via pdf-lib:
+      pdfX: raw.transform[4], pdfY: raw.transform[5],
+      pdfHeight: raw.height || fontHeight / scale, pdfWidth: raw.width,
+      fontKey: raw.fontName,
+    });
+
+    div.addEventListener('click', () => selectItem(S.pages.length, items.length - 1));
+    div.addEventListener('input', () => onItemInput(S.pages.length, items.length - 1));
+  });
+
+  stage.appendChild(wrap);
+  return { viewport, items, canvas, pageNum, scale };
+}
+
+function refreshFontList(){
+  const ul = el('fontList');
+  ul.innerHTML = '';
+  const uniq = new Map();
+  S.fontsSeen.forEach(f => uniq.set(f.rawName, f));
+  if (uniq.size === 0){
+    ul.innerHTML = '<li class="empty-state" style="border:none;">None yet</li>';
+    return;
+  }
+  uniq.forEach((f, name) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<span title="${name}">${name.length > 22 ? name.slice(0,20)+'…' : name}</span><span class="match">→ ${f.label}</span>`;
+    ul.appendChild(li);
+  });
+}
+
+/* ============ Selection + interaction ============ */
+function selectItem(pageIdx, itemIdx){
+  const page = S.pages[pageIdx - 1];
+  const item = page.items[itemIdx];
+  const fontInfo = S.fontsSeen.get(item.fontKey);
+  const key = `${pageIdx-1}-${itemIdx}`;
+
+  if (S.mode === 'form'){
+    item.div.classList.toggle('field-marked');
+    if (S.formMarks.has(key)) S.formMarks.delete(key); else S.formMarks.add(key);
+  }
+
+  sidebar.innerHTML = `
+    <div class="specimen">
+      <div class="row"><span>Detected font</span><b>${fontInfo.rawName}</b></div>
+      <div class="row"><span>Matched to</span><b>${fontInfo.label}</b></div>
+      <div class="row"><span>Size</span><b>${item.pdfHeight.toFixed(1)} pt</b></div>
+      <div class="row"><span>Mode</span><b>${S.mode === 'form' ? (S.formMarks.has(key) ? 'Marked as field' : 'Not marked') : (S.mode === 'edit' ? 'Editable' : 'View only')}</b></div>
+      <div class="sample" style="font:${cssFontStack(fontInfo).replace('1em','20px')};">${escapeHtml(item.div.textContent || item.original)}</div>
+    </div>
+    ${S.mode === 'form' ? '<p class="hint">Click again to unmark. Marked lines become fillable fields on export.</p>' : ''}
+  `;
+}
+function escapeHtml(s){ const d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
+
+function onItemInput(pageIdx, itemIdx){
+  const page = S.pages[pageIdx - 1];
+  const item = page.items[itemIdx];
+  const changed = item.div.textContent !== item.original;
+  item.div.classList.toggle('dirty', changed);
+}
+
+function setMode(mode){
+  S.mode = mode;
+  el('editModeBtn').classList.toggle('active', mode === 'edit');
+  el('formModeBtn').classList.toggle('active', mode === 'form');
+
+  const banner = el('modeBanner');
+  if (mode === 'edit'){
+    banner.textContent = 'EDIT MODE — click any line of text and type to replace it';
+    banner.classList.add('show');
+  } else if (mode === 'form'){
+    banner.textContent = 'FORM-FIELD MODE — click lines to mark them as fillable fields';
+    banner.classList.add('show');
+  } else {
+    banner.classList.remove('show');
+  }
+
+  document.querySelectorAll('.txt-item').forEach(div => {
+    div.contentEditable = mode === 'edit' ? 'true' : 'false';
+    div.classList.toggle('editable', mode === 'edit');
+  });
+}
+
+/* ============ File loading ============ */
+function openFilePicker(){ el('fileInput').click(); }
+el('openBtn').addEventListener('click', openFilePicker);
+el('dropOpenBtn').addEventListener('click', openFilePicker);
+el('fileInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const buf = await file.arrayBuffer();
+  await loadPdf(buf);
+  setMode('view');
+});
+
+el('editModeBtn').addEventListener('click', () => setMode(S.mode === 'edit' ? 'view' : 'edit'));
+el('formModeBtn').addEventListener('click', () => setMode(S.mode === 'form' ? 'view' : 'form'));
+
+/* Drag & drop */
+stage.addEventListener('dragover', e => e.preventDefault());
+stage.addEventListener('drop', async e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (file && file.type === 'application/pdf'){
+    const buf = await file.arrayBuffer();
+    await loadPdf(buf);
+    setMode('view');
+  }
+});
+
+/* ============ Export: flattened edited PDF ============ */
+async function exportEditedPdf(){
+  if (!S.originalBytes){ toast('Open a PDF first.'); return; }
+  busy(true);
+  try {
+    const pdfDoc = await PDFDocument.load(S.originalBytes);
+    const fontCache = {};
+    const getFont = async (key) => fontCache[key] || (fontCache[key] = await pdfDoc.embedFont(StandardFonts[key]));
+
+    let changes = 0;
+    for (let p = 0; p < S.pages.length; p++){
+      const pageData = S.pages[p];
+      const pdfPage = pdfDoc.getPage(p);
+      for (const item of pageData.items){
+        const newText = item.div.textContent;
+        if (newText === item.original) continue;
+        changes++;
+        const fontInfo = S.fontsSeen.get(item.fontKey);
+        const font = await getFont(fontInfo.stdKey);
+        const size = item.pdfHeight || 11;
+        const newWidth = font.widthOfTextAtSize(newText || ' ', size);
+        const coverWidth = Math.max(item.pdfWidth || 0, newWidth) + 4;
+
+        pdfPage.drawRectangle({
+          x: item.pdfX - 1, y: item.pdfY - size * 0.28,
+          width: coverWidth, height: size * 1.35,
+          color: rgb(1, 1, 1),
+        });
+        if (newText && newText.trim()){
+          pdfPage.drawText(newText, { x: item.pdfX, y: item.pdfY, size, font, color: rgb(0, 0, 0) });
+        }
+      }
+    }
+    if (changes === 0){ toast('No text was changed — nothing to export. Try Edit Text mode first.'); busy(false); return; }
+    const bytes = await pdfDoc.save();
+    downloadBytes(bytes, 'edited.pdf');
+    toast(`Exported edited PDF with ${changes} changed line${changes>1?'s':''}.`);
+  } catch(err){
+    console.error(err);
+    toast('Export failed: ' + err.message);
+  } finally { busy(false); }
+}
+
+/* ============ Export: interactive fillable form ============ */
+async function exportFillableForm(){
+  if (!S.originalBytes){ toast('Open a PDF first.'); return; }
+  if (S.formMarks.size === 0){ toast('Switch to "Mark Form Fields" mode and click lines to convert first.'); return; }
+  busy(true);
+  try {
+    const pdfDoc = await PDFDocument.load(S.originalBytes);
+    const form = pdfDoc.getForm();
+    const fontCache = {};
+    const getFont = async (key) => fontCache[key] || (fontCache[key] = await pdfDoc.embedFont(StandardFonts[key]));
+
+    let count = 0;
+    for (const key of S.formMarks){
+      const [pageIdx, itemIdx] = key.split('-').map(Number);
+      const item = S.pages[pageIdx].items[itemIdx];
+      const pdfPage = pdfDoc.getPage(pageIdx);
+      const fontInfo = S.fontsSeen.get(item.fontKey);
+      const font = await getFont(fontInfo.stdKey);
+      const size = item.pdfHeight || 11;
+      const value = item.div.textContent || '';
+      const boxWidth = Math.max(item.pdfWidth || 0, font.widthOfTextAtSize(value || ' ', size)) + 24;
+      const boxHeight = size * 1.5;
+      const boxX = item.pdfX - 2;
+      const boxY = item.pdfY - size * 0.32;
+
+      pdfPage.drawRectangle({ x: boxX, y: boxY, width: boxWidth, height: boxHeight, color: rgb(1, 1, 1) });
+
+      count++;
+      const field = form.createTextField(`field_p${pageIdx + 1}_${itemIdx}_${count}`);
+      field.setText(value);
+      field.addToPage(pdfPage, { x: boxX, y: boxY, width: boxWidth, height: boxHeight, font, borderWidth: 0 });
+      field.setFontSize(size);
+    }
+    const bytes = await pdfDoc.save();
+    downloadBytes(bytes, 'fillable-form.pdf');
+    toast(`Exported fillable PDF with ${count} field${count > 1 ? 's' : ''}.`);
+  } catch(err){
+    console.error(err);
+    toast('Export failed: ' + err.message);
+  } finally { busy(false); }
+}
+
+function downloadBytes(bytes, filename){
+  const blob = new Blob([bytes], { type: 'application/pdf' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+el('exportBtn').addEventListener('click', exportEditedPdf);
+el('exportFormBtn').addEventListener('click', exportFillableForm);
+</script>
+</body>
 </html>
